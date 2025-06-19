@@ -1,0 +1,209 @@
+# Import necessary libraries for building a FastAPI web application
+from fastapi import FastAPI, HTTPException, Query  # FastAPI framework for building APIs
+from fastapi.responses import FileResponse, StreamingResponse  # Response types for serving files and streaming data
+from fastapi.staticfiles import StaticFiles  # For serving static files (HTML, CSS, JS)
+import requests  # For making HTTP requests to external APIs (Ollama)
+import os  # For file system operations
+import json  # For JSON data parsing and serialization
+import asyncio  # For asynchronous operations and delays
+
+# Create the main FastAPI application instance
+# This is the core object that handles all HTTP requests and responses
+app = FastAPI()
+
+# Mount static files directory to serve frontend assets
+# Purpose: Allows the web server to serve HTML, CSS, JavaScript files from the "static" folder
+# Why: Frontend files need to be accessible via HTTP requests for the web interface
+# The "/static" URL path will map to the "static" directory on the file system
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Configuration settings for Ollama AI model API
+# Purpose: Define the connection details for the local Ollama AI service
+# Why: These settings allow the application to communicate with the AI model
+ollama_url = "http://localhost:11434/api/generate"  # API endpoint for Ollama's text generation
+ollama_model = "tinyllama"  # The specific AI model to use - REAL AI ENABLED
+
+@app.get("/")
+def serve_homepage():
+    """
+    HTTP GET endpoint handler for the root URL ("/")
+
+    Purpose: Serves the main HTML page when users visit the website's homepage
+    Why: This function is needed to provide the initial web interface to users
+
+    Function Logic:
+    1. This decorator (@app.get("/")) registers this function as a handler for GET requests to "/"
+    2. When a user navigates to the root URL, this function is automatically called
+    3. The function returns the main HTML file that contains the chat interface
+
+    Returns:
+        FileResponse: A FastAPI response object that serves the index.html file
+        - Uses os.path.join() to safely construct the file path across different operating systems
+        - Serves the file from the "static" directory where frontend files are stored
+    """
+    return FileResponse(os.path.join("static", "index.html"))
+
+@app.get("/favicon.ico")
+def favicon():
+    """
+    HTTP GET endpoint handler for favicon requests
+
+    Purpose: Handles browser requests for favicon.ico to prevent 404 errors
+    Why: Browsers automatically request favicon.ico, and returning a proper response prevents 404 logs
+
+    Returns:
+        dict: A simple JSON response indicating no favicon is available
+        - This prevents the 404 error while keeping the implementation simple
+        - You could also return an actual .ico file if you have one
+    """
+    return {"message": "No favicon configured"}
+
+@app.post("/chat")
+async def chat(prompt: str = Query(..., description="User prompt for AI model")):
+    """
+    HTTP POST endpoint handler for chat functionality
+
+    Purpose: Processes user messages and streams AI responses back in real-time
+    Why: This function enables interactive chat by connecting the frontend to the Ollama AI model
+
+    Parameters:
+        prompt (str): The user's message/question sent from the frontend
+        - Uses Query(...) to extract the prompt from URL query parameters
+        - The "..." makes this parameter required
+
+    Function Logic:
+    1. Receives user input through HTTP POST request
+    2. Forwards the prompt to the local Ollama AI service
+    3. Streams the AI's response back to the frontend word by word
+    4. Handles errors and connection issues gracefully
+
+    Returns:
+        StreamingResponse: A real-time stream of AI-generated text
+    """
+
+    async def generate_stream():
+        """
+        Inner async generator function that handles the streaming logic
+
+        Purpose: Creates a stream of AI responses that can be sent to the frontend in real-time
+        Why: Streaming allows users to see the AI response as it's being generated, improving user experience
+
+        Yields:
+            str: Server-Sent Events (SSE) formatted data containing AI response words or error messages
+        """
+        try:
+            # Step 1: Send HTTP POST request to Ollama API
+            # Purpose: Request AI text generation from the local Ollama service
+            # Why: Ollama runs the AI model locally and provides an API for text generation
+            response = requests.post(
+                ollama_url,  # The API endpoint URL configured earlier
+                headers={"Content-Type": "application/json"},  # Tell server we're sending JSON data
+                json={
+                    "model": ollama_model,  # Specify which AI model to use (tinyllama)
+                    "prompt": prompt,       # The user's input text
+                    "stream": True          # Enable streaming mode for real-time responses
+                },
+                stream=True  # Enable streaming on the HTTP request itself
+            )
+
+            # Step 2: Check if the API request was successful
+            # Purpose: Ensure the Ollama service responded without HTTP errors
+            # Why: If there's an error, we need to inform the user instead of trying to process invalid data
+            if not response.ok:
+                # Send error message to frontend in SSE format
+                yield f"data: {json.dumps({'error': f'HTTP error! status: {response.status_code}'})}\n\n"
+                return  # Exit the function early if there's an error
+
+            # Step 3: Process the streaming response line by line
+            # Purpose: Parse each chunk of data received from Ollama API
+            # Why: Ollama sends responses as multiple JSON objects, one per line
+            for line in response.iter_lines():
+                if line:  # Skip empty lines
+                    try:
+                        # Step 3a: Decode the binary data to text
+                        # Purpose: Convert bytes received from HTTP response to readable string
+                        # Why: HTTP responses come as bytes, but we need text to parse JSON
+                        line_str = line.decode('utf-8')
+
+                        # Step 3b: Parse the JSON data
+                        # Purpose: Convert JSON string to Python dictionary for data extraction
+                        # Why: Ollama sends structured data in JSON format that we need to process
+                        json_response = json.loads(line_str)
+
+                        # Step 3c: Extract the AI-generated text from the response
+                        # Purpose: Get the actual text content that the AI model generated
+                        # Why: The JSON response contains metadata; we only need the 'response' field
+                        if 'response' in json_response:
+                            response_text = json_response['response']
+
+                            # Step 3d: Split response into individual words for streaming
+                            # Purpose: Break down the response to send it word by word to the frontend
+                            # Why: This creates a typewriter effect, making the chat feel more interactive
+                            words = response_text.split(' ')  # Split text on spaces to get individual words
+
+                            # Step 3e: Stream each word individually
+                            for word in words:
+                                if word.strip():  # Skip empty words (avoid sending blank data)
+                                    # Send word to frontend in Server-Sent Events format
+                                    # Format: "data: {JSON}\n\n" is required for SSE protocol
+                                    yield f"data: {json.dumps({'word': word + ' '})}\n\n"
+                                    # Add small delay between words for visual effect
+                                    await asyncio.sleep(0.1)  # 100ms delay creates smooth typing animation
+
+                        # Step 3f: Check if this is the final chunk of the response
+                        # Purpose: Detect when the AI has finished generating the complete response
+                        # Why: We need to signal the frontend that the response is complete
+                        if json_response.get('done', False):
+                            # Send completion signal to frontend
+                            yield f"data: {json.dumps({'done': True})}\n\n"
+                            break  # Exit the loop since response is complete
+
+                    except json.JSONDecodeError:
+                        # Step 3g: Handle malformed JSON responses
+                        # Purpose: Skip lines that aren't valid JSON without crashing the application
+                        # Why: Sometimes the stream might contain incomplete or corrupted data
+                        continue  # Skip this line and continue processing the next one
+
+        # Step 4: Handle network and connection errors
+        except requests.RequestException as e:
+            # Send specific error message for API connection problems
+            yield f"data: {json.dumps({'error': f'Error connecting to Ollama API: {str(e)}'})}\n\n"
+
+        # Step 5: Handle any other unexpected errors
+        # Purpose: Catch all other possible errors to prevent application crashes
+        # Why: Provides a safety net for unforeseen issues
+        except Exception as e:
+            # Send generic error message for any other problems
+            yield f"data: {json.dumps({'error': f'An unexpected error occurred: {str(e)}'})}\n\n"
+
+    # Step 6: Return the streaming response to the client
+    # Purpose: Send the AI-generated content back to the frontend as a real-time stream
+    # Why: StreamingResponse allows the frontend to receive data as it's generated
+    return StreamingResponse(
+        generate_stream(),  # The async generator function that produces the stream
+        media_type="text/event-stream",  # SSE (Server-Sent Events) content type
+        headers={
+            # HTTP headers to configure the streaming behavior
+            "Cache-Control": "no-cache",  # Prevent caching of streaming data
+            "Connection": "keep-alive",   # Keep the connection open for streaming
+            "Access-Control-Allow-Origin": "*",  # Allow cross-origin requests (CORS)
+        }
+    )
+
+# Server startup configuration
+# Purpose: Run the FastAPI application when this script is executed directly
+# Why: This allows the application to be started by running "python app.py"
+if __name__ == "__main__":
+    # Import uvicorn web server
+    # Purpose: uvicorn is an ASGI server that can run FastAPI applications
+    # Why: FastAPI needs an ASGI server to handle HTTP requests and responses
+    import uvicorn
+
+    # Start the web server
+    # Purpose: Launch the application and make it accessible via HTTP
+    # Parameters:
+    #   - "app:app": Import string format (module:variable) required for reload functionality
+    #   - host="0.0.0.0": Listen on all network interfaces (allows external connections)
+    #   - port=8000: The port number where the server will listen for requests
+    #   - reload=True: Automatically restart the server when code changes are detected
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

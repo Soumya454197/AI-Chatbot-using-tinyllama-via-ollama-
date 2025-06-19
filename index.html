@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIV AI - Advanced Chat Assistant</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 800px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            max-height: 700px;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+
+        .chat-header h1 {
+            font-size: 2rem;
+            font-weight: 300;
+            margin-bottom: 5px;
+        }
+
+        .chat-header .subtitle {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        #chat-box {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            position: relative;
+        }
+
+        #chat-box::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #chat-box::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        #chat-box::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 10px;
+        }
+
+        #chat-box::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        .message {
+            margin: 15px 0;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .user-message {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .ai-message, .error-message {
+            display: flex;
+            justify-content: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 18px;
+            border-radius: 18px;
+            position: relative;
+            word-wrap: break-word;
+        }
+
+        .user-message .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .ai-message .message-bubble {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+            border-bottom-left-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .error-message .message-bubble {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+            border-bottom-left-radius: 5px;
+        }
+
+        .message-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            margin: 0 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .user-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .ai-avatar {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        }
+
+        .error-avatar {
+            background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+        }
+
+        .input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        #user-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        #user-input:focus {
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .send-button {
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .send-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .send-button:active {
+            transform: scale(0.95);
+        }
+
+        .send-button.loading {
+            pointer-events: none;
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 10px 0;
+            font-style: italic;
+            color: #666;
+        }
+
+        .typing-dots {
+            display: inline-block;
+        }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #667eea;
+            margin: 0 2px;
+            animation: typing 1.4s infinite ease-in-out;
+        }        .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        .typing-cursor {
+            color: #667eea;
+            animation: blink 1s infinite;
+            font-weight: bold;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .streaming-content {
+            word-wrap: break-word;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #666;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .chat-container {
+                height: 95vh;
+                border-radius: 15px;
+            }
+
+            .chat-header h1 {
+                font-size: 1.5rem;
+            }
+
+            .message-bubble {
+                max-width: 85%;
+            }
+
+            .input-container {
+                padding: 15px;
+                gap: 10px;
+            }
+
+            #user-input {
+                padding: 12px 18px;
+            }
+
+            .send-button {
+                width: 45px;
+                height: 45px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .chat-header {
+                padding: 15px;
+            }
+
+            .status-indicator {
+                position: static;
+                justify-content: center;
+                margin-top: 10px;
+            }
+
+            .message-avatar {
+                width: 30px;
+                height: 30px;
+                margin: 0 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1><i class="fas fa-robot"></i> NIV AI</h1>
+            <p class="subtitle">Advanced Chat Assistant</p>
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span style="font-size: 0.8rem;">Online</span>
+            </div>
+        </div>
+        
+        <div id="chat-box">
+            <div class="empty-state" id="empty-state">
+                <i class="fas fa-comments"></i>
+                <h3>Welcome to NIV AI!</h3>
+                <p>Start a conversation by typing a message below.</p>
+            </div>
+        </div>
+        
+        <div class="typing-indicator" id="typing-indicator">
+            <div class="message ai-message">
+                <div class="message-avatar ai-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="message-bubble">
+                    NIV AI is typing
+                    <div class="typing-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="input-container">
+            <input type="text" id="user-input" placeholder="Type your message here..." autocomplete="off">
+            <button class="send-button" onclick="sendMessage()" id="send-btn">
+                <i class="fas fa-paper-plane" id="send-icon"></i>
+                <div class="loading-spinner" id="loading-spinner"></div>
+            </button>
+        </div>
+    </div>    <script>
+        let messageCount = 0;
+          async function sendMessage() {
+            const inputField = document.getElementById("user-input");
+            const chatBox = document.getElementById("chat-box");
+            const sendBtn = document.getElementById("send-btn");
+            const sendIcon = document.getElementById("send-icon");
+            const loadingSpinner = document.getElementById("loading-spinner");
+            const typingIndicator = document.getElementById("typing-indicator");
+            const emptyState = document.getElementById("empty-state");
+            
+            const userMessage = inputField.value.trim();
+            
+            if (!userMessage) return;
+
+            // Hide empty state on first message
+            if (messageCount === 0) {
+                emptyState.style.display = 'none';
+            }
+
+            // Add user message
+            addMessage(userMessage, 'user');
+            inputField.value = "";
+            
+            // Show loading state
+            sendBtn.classList.add('loading');
+            sendIcon.style.display = 'none';
+            loadingSpinner.style.display = 'block';
+            typingIndicator.style.display = 'block';
+            
+            // Scroll to bottom
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Create AI message container for streaming
+            const aiMessageContainer = createStreamingMessage();
+            
+            try {
+                // Hide typing indicator
+                typingIndicator.style.display = 'none';
+                
+                // Start streaming request
+                const response = await fetch(`/chat?prompt=${encodeURIComponent(userMessage)}`, {
+                    method: "POST",
+                    headers: {
+                        "Accept": "text/event-stream",
+                        "Cache-Control": "no-cache"
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                
+                // Process streaming response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                  if (data.word) {
+                                    // Add word to the streaming message
+                                    appendWordToMessage(aiMessageContainer, data.word);
+                                } else if (data.done) {
+                                    // Remove typing cursor when complete
+                                    const cursor = aiMessageContainer.querySelector('.typing-cursor');
+                                    if (cursor) cursor.remove();
+                                    break;
+                                } else if (data.error) {
+                                    throw new Error(data.error);
+                                }
+                            } catch (parseError) {
+                                // Skip invalid JSON
+                                continue;
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                typingIndicator.style.display = 'none';
+                // Remove the streaming container and show error
+                if (aiMessageContainer && aiMessageContainer.parentNode) {
+                    aiMessageContainer.parentNode.removeChild(aiMessageContainer);
+                }
+                addMessage(`Connection error: ${error.message}`, 'error');
+            } finally {
+                // Reset loading state
+                sendBtn.classList.remove('loading');
+                sendIcon.style.display = 'block';
+                loadingSpinner.style.display = 'none';
+            }
+        }
+          function addMessage(message, type) {
+            const chatBox = document.getElementById("chat-box");
+            messageCount++;
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            
+            let avatarIcon, avatarClass;
+            switch(type) {
+                case 'user':
+                    avatarIcon = 'fas fa-user';
+                    avatarClass = 'user-avatar';
+                    break;
+                case 'ai':
+                    avatarIcon = 'fas fa-robot';
+                    avatarClass = 'ai-avatar';
+                    break;
+                case 'error':
+                    avatarIcon = 'fas fa-exclamation-triangle';
+                    avatarClass = 'error-avatar';
+                    break;
+            }
+            
+            messageDiv.innerHTML = `
+                <div class="message-avatar ${avatarClass}">
+                    <i class="${avatarIcon}"></i>
+                </div>
+                <div class="message-bubble">
+                    ${formatMessage(message)}
+                </div>
+            `;
+            
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+        
+        function createStreamingMessage() {
+            const chatBox = document.getElementById("chat-box");
+            messageCount++;
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ai-message';
+            
+            messageDiv.innerHTML = `
+                <div class="message-avatar ai-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="message-bubble">
+                    <span class="streaming-content"></span>
+                    <span class="typing-cursor">|</span>
+                </div>
+            `;
+            
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return messageDiv;
+        }
+        
+        function appendWordToMessage(messageContainer, word) {
+            const contentSpan = messageContainer.querySelector('.streaming-content');
+            const cursor = messageContainer.querySelector('.typing-cursor');
+            const chatBox = document.getElementById("chat-box");
+            
+            if (contentSpan) {
+                contentSpan.textContent += word;
+                // Auto-scroll to bottom as content grows
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        }
+        
+        function formatMessage(message) {
+            // Basic formatting for better readability
+            return message
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code style="background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 3px;">$1</code>');
+        }
+        
+        // Enhanced enter key support
+        document.getElementById("user-input").addEventListener("keypress", function(event) {
+            if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        // Auto-focus input field
+        window.addEventListener('load', function() {
+            document.getElementById("user-input").focus();
+        });
+        
+        // Auto-resize input based on content
+        document.getElementById("user-input").addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+        });
+        
+        // Add some example prompts
+        function addExamplePrompts() {
+            const examples = [
+                "Hello! How can you help me today?",
+                "What's the weather like?", 
+                "Tell me a joke",
+                "Explain quantum physics simply"
+            ];
+            
+            // You can uncomment this to show example prompts
+            // setTimeout(() => {
+            //     const chatBox = document.getElementById("chat-box");
+            //     const exampleDiv = document.createElement('div');
+            //     exampleDiv.className = 'example-prompts';
+            //     exampleDiv.innerHTML = `
+            //         <h4>Try asking:</h4>
+            //         ${examples.map(ex => `<button onclick="document.getElementById('user-input').value='${ex}'; sendMessage();">${ex}</button>`).join('')}
+            //     `;
+            //     chatBox.appendChild(exampleDiv);
+            // }, 1000);
+        }
+    </script>
+</body>
+</html>
+
